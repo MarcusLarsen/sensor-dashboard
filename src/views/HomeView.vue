@@ -1,3 +1,22 @@
+<script setup>
+import { ref } from "vue"
+import Websocketitem from "../components/Websocketitem.vue"
+import ConnectBtn from "../components/ConnectBtn.vue"
+import Mapitem from "../components/Mapitem.vue"
+
+const entities = ref([])
+const selectedEntity = ref(null)
+
+// toggle selection on click
+function handleFocusEntity(entityId) {
+  if (selectedEntity.value === entityId) {
+    selectedEntity.value = null 
+  } else {
+    selectedEntity.value = entityId
+  }
+}
+</script>
+
 <template>
   <main class="main-container">
     <!-- Header -->
@@ -7,24 +26,22 @@
     </div>
 
     <!-- Sensor list -->
-    <Websocketitem v-model:entities="entities" />
+    <Websocketitem
+      v-model:entities="entities"
+      :selectedEntity="selectedEntity" 
+      @focus-entity="handleFocusEntity" 
+    />
 
     <!-- Map -->
     <div class="map-wrapper">
-      <Mapitem :entities="entities" />
+      <Mapitem 
+        :entities="entities" 
+        :selectedEntity="selectedEntity"
+        @focus-entity="handleFocusEntity" 
+      /> 
     </div>
   </main>
 </template>
-
-<script setup>
-import { ref } from "vue"
-import Websocketitem from "../components/Websocketitem.vue"
-import ConnectBtn from "../components/ConnectBtn.vue"
-import Mapitem from "../components/Mapitem.vue"
-
-
-const entities = ref([])
-</script>
 
 <style>
 .main-container {

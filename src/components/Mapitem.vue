@@ -1,11 +1,14 @@
 <script setup>
-import { ref, computed, watch, onMounted } from "vue"
+import { ref, computed, watch, onMounted, nextTick } from "vue"
 
 const props = defineProps({
-  entities: { type: Array, default: () => [] }
+  entities: { type: Array, default: () => [] },
+  selectedEntity: { type: String, default: null }
 })
 
-// Load saved positions from localStorage
+const emit = defineEmits(["focus-entity"])
+
+// Load saved positions
 const saved = localStorage.getItem("sensorPositions")
 const sensorPositions = ref(saved ? JSON.parse(saved) : {})
 
@@ -13,16 +16,15 @@ const sensorPositions = ref(saved ? JSON.parse(saved) : {})
 let dragging = null
 let offsetX = 0
 let offsetY = 0
-let containerRect = null
+let container = null
 
 function startDrag(event, entity) {
   dragging = entity.entity_id
 
   const dot = event.target
   const rect = dot.getBoundingClientRect()
-  containerRect = dot.parentElement.getBoundingClientRect()
+  container = dot.parentElement.getBoundingClientRect()
 
-  // Center mouse on dot
   offsetX = event.clientX - rect.left - rect.width / 2
   offsetY = event.clientY - rect.top - rect.height / 2
 
@@ -31,18 +33,16 @@ function startDrag(event, entity) {
 }
 
 function onDrag(event) {
-  if (!dragging || !containerRect) return
+  if (!dragging || !container) return
 
-  // Relative to container (floorplan)
-  const newTop = event.clientY - containerRect.top - offsetY
-  const newLeft = event.clientX - containerRect.left - offsetX
+  const newTop = event.clientY - container.top - offsetY
+  const newLeft = event.clientX - container.left - offsetX
 
   sensorPositions.value[dragging] = {
     top: `${newTop}px`,
     left: `${newLeft}px`
   }
 
-  // Save positions to localStorage
   localStorage.setItem("sensorPositions", JSON.stringify(sensorPositions.value))
 }
 
@@ -59,6 +59,27 @@ const positionedEntities = computed(() =>
   })
 )
 
+// Auto-scroll to center highlighted dot
+watch(
+  () => props.selectedEntity,
+  async (newId) => {
+    if (!newId) return
+    await nextTick() // wait for DOM update
+    const dot = document.querySelector(".dot.highlight")
+    const containerEl = document.querySelector(".map-container")
+    if (dot && containerEl) {
+      const scrollLeft = dot.offsetLeft - containerEl.clientWidth / 2 + dot.clientWidth / 2
+      const scrollTop = dot.offsetTop - containerEl.clientHeight / 2 + dot.clientHeight / 2
+
+      containerEl.scrollTo({
+        left: scrollLeft,
+        top: scrollTop,
+        behavior: "smooth"
+      })
+    }
+  }
+)
+
 watch(
   () => props.entities,
   val => console.log("Mapitem entities:", val),
@@ -68,6 +89,11 @@ watch(
 onMounted(() => {
   console.log("Loaded positions:", sensorPositions.value)
 })
+
+// Emit click on dot
+function handleDotClick(entityId) {
+  emit("focus-entity", entityId)
+}
 </script>
 
 <template>
@@ -78,10 +104,14 @@ onMounted(() => {
       v-for="entity in positionedEntities"
       :key="entity.entity_id"
       class="dot"
-      :class="entity.state === 'on' ? 'open' : 'closed'"
+      :class="[
+        entity.state === 'on' ? 'open' : 'closed',
+        entity.entity_id === props.selectedEntity ? 'highlight' : ''
+      ]"
       :style="{ top: entity.pos.top, left: entity.pos.left }"
       :title="entity.attributes?.friendly_name || entity.entity_id"
       @mousedown="startDrag($event, entity)"
+      @click.stop="handleDotClick(entity.entity_id)"
     ></div>
   </div>
 </template>
@@ -91,7 +121,7 @@ onMounted(() => {
   position: relative;
   width: 100%;
   height: 600px;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .floorplan {
@@ -118,5 +148,11 @@ onMounted(() => {
 
 .dot.closed {
   background-color: #16a34a;
+}
+
+.dot.highlight {
+  border: 3px solid yellow;
+  box-shadow: 0 0 12px 4px rgba(255, 255, 0, 0.7);
+  z-index: 10;
 }
 </style>
